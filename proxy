@@ -1,0 +1,37 @@
+- name: Installation et Configuration du Load Balancer
+  hosts: node2
+  become: true
+  tasks:
+    - name: Installation du paquet
+      ansible.builtin.apt:
+        - update
+        - haproxy
+
+    - name: Réinitialiser le fichier HAProxy et appliquer la configuration
+      ansible.builtin.lineinfile:
+        path: /etc/haproxy/haproxy.cfg
+        state: 'absent'
+
+    - name: Créer le fichier HAProxy avec la configuration de load balancing
+      ansible.builtin.lineinfile:
+        path: /etc/haproxy/haproxy.cfg
+        line: |
+          listen apache2
+            bind 10.8.141.154:80
+            balance roundrobin
+            option httpclose
+            option forwardfor
+            mode http
+            server web1 10.8.141.223:80 check
+            server web2 10.8.141.224:80 check
+            stats enable
+            stats hide-version
+            stats show-node
+            stats auth admin:admin
+            stats uri /stats
+        state: present
+
+    - name: Redémarrer HAProxy après configuration
+      ansible.builtin.service:
+        name: haproxy
+        state: restarted
