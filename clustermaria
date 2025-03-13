@@ -1,0 +1,122 @@
+- name: Deploy MariaDB Cluster
+  hosts: all
+  become: yes
+  gather_facts: false
+  tasks:
+    - name: Install MariaDB
+      apt:
+        name: mariadb-server
+        state: present
+
+    - name: Start and enable MariaDB service
+      service:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Stop MariaDB service
+      service:
+        name: mysql
+        state: stopped
+
+- name: Configure MariaDB for Galera on Ubu2
+  hosts: server2
+  tasks:
+    - name: Copy Galera on Ubu2
+      template:
+        src: "/etc/ansible/roles/galera/templates/my2.cnf.j2"
+        dest: "/etc/mysql/conf.d/my.cnf"
+
+- name: Configure MariaDB for Galera on Ubu3
+  hosts: server3
+  tasks:
+    - name: Copy Galera on Ubu3
+      template:
+        src: "/etc/ansible/roles/galera/templates/my3.cnf.j2"
+        dest: "/etc/mysql/conf.d/my.cnf"
+
+- name: Configure MariaDB for Galera on Backup1
+  hosts: backup1
+  tasks:
+    - name: Copy Galera on Backup1
+      template:
+        src: "/etc/ansible/roles/galera/templates/my4.cnf.j2"
+        dest: "/etc/mysql/conf.d/my.cnf"
+
+- name: Execute command on Ubu2
+  hosts: server2
+  become: yes
+  tasks:
+    - name: Run shell command
+      shell: |
+        galera_new_cluster
+
+- name: Start MariaDB service on Ubu2
+  hosts: server2
+  become: yes
+  tasks:
+    - name: Start MariaDB service
+      service:
+        name: mysql
+        state: started
+
+- name: Start MariaDB service on Ubu3
+  hosts: server3
+  become: yes
+  tasks:
+    - name: Start MariaDB service
+      service:
+        name: mysql
+        state: started
+
+- name: Start MariaDB service on Backup1
+  hosts: backup1
+  become: yes
+  tasks:
+    - name: Start MariaDB service
+      service:
+        name: mysql
+        state: started
+
+- name: Create database and tables
+  hosts: ubu2
+  become: yes
+  tasks:
+    - name: Create database
+      shell: mysql -u root -p'ubu2' -e "CREATE DATABASE ymo;"
+
+    - name: Create Utilisateurs table
+      shell: |
+        mysql -u root -p'ubu2' -e "USE ymo;
+        CREATE TABLE IF NOT EXISTS Utilisateurs (
+          Id INT AUTO_INCREMENT PRIMARY KEY,
+          Nom VARCHAR(255),
+          Email VARCHAR(255)
+        );"
+
+    - name: Insert data into Utilisateurs table
+      shell: |
+        mysql -u root -p'ubu2' -e "USE ymo;
+        INSERT INTO Utilisateurs (Id, Nom, Email) VALUES (1010, 'xxx', 'xxx@hotmail.com'), (1020, 'xxx', 'xxx@hotmail.com'), (1030, 'xxx', 'xxx@hotmail.com');"
+
+- name: Automatiser les sauvegardes avec mysqldump et transfert
+  hosts: backup1
+  become: true
+  tasks:
+    - name: Créer le répertoire de sauvegarde localement
+      file:
+        path: /opt/mysql_backups
+        state: directory
+        mode: '0755'
+
+    - name: Créer le script de sauvegarde
+      template:
+        src: /etc/ansible/galera/templates/backup_script.sh.j2
+        dest: /opt/mysql_backups/backup_script.sh
+        mode: '0755'
+
+    - name: Créer la tâche cron pour exécuter le script de sauvegarde toutes les 5 minutes
+      cron:
+        name: Backup MySQL
+        minute: "*/5"
+        job: /opt/mysql_backups/backup_script.sh
