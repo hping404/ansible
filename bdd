@@ -1,0 +1,61 @@
+- name: Mettre à jour la liste des paquets
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Corriger les paquets cassés s'il y en a
+  apt:
+    upgrade: dist
+    force_apt_get: yes
+    dpkg_options: 'force-confdef,force-confold'
+
+- name: Installer MariaDB et python3-pymysql
+  apt:
+    name:
+      - mariadb-server
+      - python3-pymysql
+    state: present
+    install_recommends: no
+
+- name: Assurer que le service MariaDB est démarré et activé
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: Créer la base de données
+  shell: |
+    mysql -u {{ mysql_root_user }} {% if mysql_root_password != "" %}-p{{ mysql_root_password }}{% endif %} -e "CREATE DATABASE {{ mysql_db_name }};"
+  args:
+    warn: false
+
+- name: Créer l'utilisateur MySQL et lui donner les droits sur la base
+  shell: |
+    mysql -u {{ mysql_root_user }} {% if mysql_root_password != "" %}-p{{ mysql_root_password }}{% endif %} -e "CREATE USER '{{ mysql_user }}'@'localhost' IDENTIFIED BY '{{ mysql_user_password }}'; GRANT ALL PRIVILEGES ON {{ mysql_db_name }}.* TO '{{ mysql_user }}'@'localhost'; FLUSH PRIVILEGES;"
+  args:
+    warn: false
+
+- name: Créer un dossier pour ma bdd
+  file:
+    path: /home/mysql
+    state: directory
+    owner: root
+    mode: '0755'
+
+- name: Copier le script python mysql
+  copy:
+    src: /home/ansible/bdd.py
+    dest: /home/mysql/bdd.py
+    owner: root
+    mode: '0644'
+
+- name: Ajouter une tâche cron pour importer les logs Docker chaque lundi à minuit
+  cron:
+    name: "Import des logs Docker en base MariaDB chaque lundi"
+    user: root
+    minute: "0"
+    hour: "0"
+    day: "*"
+    month: "*"
+    weekday: "1"
+    job: '/usr/bin/python3 /home/mysql/bdd.py >> /var/log/import_logs.log 2>&1'
