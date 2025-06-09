@@ -1,0 +1,33 @@
+- name: Installer Docker
+  apt:
+    name:
+      - docker.io
+      - python3-pip
+    state: present
+    update_cache: yes
+
+- name: Docker SDK pour Python3
+  pip:
+    name: docker
+
+- name: S'assurer que Docker est lancé
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Créer un volume Docker pour Jenkins
+  docker_volume:
+    name: jenkins_home
+
+- name: Lancer le conteneur Jenkins
+  docker_container:
+    name: jenkins
+    image: jenkins/jenkins:lts
+    state: started
+    restart_policy: always
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
