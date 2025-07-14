@@ -38,28 +38,3 @@
 - name: Installer Apache dans les conteneurs
   shell: docker exec {{ item }} bash -c "apt-get update && apt-get install -y apache2"
   loop: "{{ containers_names }}"
-
-- name: Générer un certificat SSL
-  shell: |
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout {{ key_path }} -out {{ cert_path }} \
-    -subj "/C=FR/ST=IDF/L=Paris/O=Projet/CN=projet.local"
-  args:
-    creates: "{{ cert_path }}"
-
-- name: Concaténer certificat et clé dans un fichier PEM
-  shell: cat {{ cert_path }} {{ key_path }} > {{ pem_web }}
-  args:
-    creates: "{{ pem_web }}"
-
-- name: Copier le fichier PEM sur chaque conteneur via docker cp
-  shell: |
-    docker cp {{ pem_web }} {{ item }}:/etc/ssl/certs/site.pem
-    docker exec {{ item }} chown root:root /etc/ssl/certs/site.pem
-    docker exec {{ item }} chmod 600 /etc/ssl/certs/site.pem
-  loop: "{{ containers_names }}"
-  args:
-    warn: false
-
-- name: Copier le fichier .pem sur le HAProxy en root
-  shell: scp {{ pem_web }} root@192.168.240.11:/etc/ssl/certs/site.pem
